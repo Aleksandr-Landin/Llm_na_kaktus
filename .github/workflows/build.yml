@@ -1,3 +1,5 @@
+# This workflow will build an Android APK
+
 name: Build APK
 
 on:
@@ -25,7 +27,7 @@ jobs:
       run: chmod +x gradlew
 
     - name: Build with Gradle
-      run: ./gradlew build assembleDebug
+      run: ./gradlew assembleDebug
 
     - name: Upload APK
       uses: actions/upload-artifact@v4
