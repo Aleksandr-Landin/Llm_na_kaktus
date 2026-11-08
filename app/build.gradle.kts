@@ -44,5 +44,8 @@ dependencies {
     implementation("androidx.compose.foundation:foundation")
     
     // Наш Cactus
-    implementation("com.cactuscompute:cactus:1.4.1-beta")
+    // Было:
+// implementation("com.cactuscompute:cactus:1.4.1-beta")
+// Стало:
+implementation("com.cactuscompute:cactus:1.0.2-beta")
 }
