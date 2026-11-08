@@ -214,26 +214,25 @@ fun IskrinkaChatScreen() {
                     withContext(Dispatchers.IO) {
                         if (selectedModelUri != null) {
                             statusText = "Копирование локального файла..."
-                            val localFile = File(context.filesDir, "local_model.gguf")
+                            // 1. Получаем папку, которую Cactus использует для моделей
+                            val modelsDir = CactusModelManager.getModelsDirectory()
+                            // 2. Создаем в ней файл с расширением .gguf
+                            val localFile = File(modelsDir, "local_model.gguf")
                             
-                            // Копируем файл
+                            // Копируем выбранный файл
                             copyUriToFile(context, selectedModelUri!!, localFile)
                             
-                            // Проверяем, что файл действительно скопировался и не пустой
                             if (!localFile.exists() || localFile.length() == 0L) {
-                                throw Exception("Файл не скопировался. Возможно, не хватает памяти на телефоне.")
+                                throw Exception("Файл не скопировался. Проверь свободное место.")
                             }
                             
                             val fileSizeMB = localFile.length() / (1024 * 1024)
-                            statusText = "Файл скопирован ($fileSizeMB МБ). Загрузка в память..."
+                            statusText = "Файл скопирован ($fileSizeMB МБ). Загрузка..."
                             
-                            // Загружаем модель
-                            // Было (не компилируется):
-// lm.initializeModel(CactusInitParams(modelPath = localFile.absolutePath, contextSize = 2048))
-
-// Стало (компилируется):
-                           lm.initializeModel(CactusInitParams(model = localFile.absolutePath, contextSize = 2048))
+                            // 3. Загружаем модель по имени файла (без расширения)
+                            lm.initializeModel(CactusInitParams(model = "local_model", contextSize = 2048))
                         } else {
+                            // Ветка для скачивания по имени (остается без изменений)
                             statusText = "Скачивание модели $modelNameInput..."
                             lm.downloadModel(modelNameInput)
                             statusText = "Инициализация модели..."
