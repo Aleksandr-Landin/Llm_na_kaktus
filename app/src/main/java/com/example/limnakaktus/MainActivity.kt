@@ -213,29 +213,28 @@ fun IskrinkaChatScreen() {
                 try {
                     withContext(Dispatchers.IO) {
                         if (selectedModelUri != null) {
-                            statusText = "Копирование локального файла..."
-                            // 1. Получаем папку, которую Cactus использует для моделей
-                            
-                           val modelsDir = CactusModelManager.getModelsDirectory()
-// Создаем папку models, если её нет
-                           if (!modelsDir.exists()) {
-    modelsDir.mkdirs()
-}
-
-                           val localFile = File(modelsDir, "local_model.gguf")
-copyUriToFile(context, selectedModelUri!!, localFile)
-                            
-                            // Копируем выбранный файл
-                            copyUriToFile(context, selectedModelUri!!, localFile)
-                            
-                            if (!localFile.exists() || localFile.length() == 0L) {
-                                throw Exception("Файл не скопировался. Проверь свободное место.")
-                            }
-                            
-                            val fileSizeMB = localFile.length() / (1024 * 1024)
-                            statusText = "Файл скопирован ($fileSizeMB МБ). Загрузка..."
-                            
-                            // 3. Загружаем модель по имени файла (без расширения)
+    statusText = "Копирование локального файла..."
+    
+    // Получаем путь (строку) и превращаем его в объект File
+                       val modelsDirPath = CactusModelManager.getModelsDirectory()
+                       val modelsDir = File(modelsDirPath)
+    
+    // Теперь методы .exists() и .mkdirs() будут работать
+                       if (!modelsDir.exists()) {
+                       modelsDir.mkdirs()
+    }
+    
+                       val localFile = File(modelsDir, "local_model.gguf")
+                       copyUriToFile(context, selectedModelUri!!, localFile)
+    
+                       if (!localFile.exists() || localFile.length() == 0L) {
+                       throw Exception("Файл не скопировался. Проверь свободное место.")
+    }
+    
+                        val fileSizeMB = localFile.length() / (1024 * 1024)
+                        statusText = "Файл скопирован ($fileSizeMB МБ). Загрузка..."
+    
+    
                             lm.initializeModel(CactusInitParams(model = "local_model", contextSize = 2048))
                         } else {
                             // Ветка для скачивания по имени (остается без изменений)
