@@ -204,38 +204,47 @@ fun IskrinkaChatScreen() {
                 }
             },
             confirmButton = {
-                TextButton(
-                    onClick = {
-                        showSettingsDialog = false
-                        
-                        scope.launch {
-                            try {
-                                withContext(Dispatchers.IO) {
-                                    if (selectedModelUri != null) {
-                                        statusText = "Копирование локального файла..."
-                                        val localFile = File(context.filesDir, "local_model.gguf")
-                                        copyUriToFile(context, selectedModelUri!!, localFile)
-                                        
-                                        statusText = "Загрузка локальной модели..."
-                                        // ВОТ ЗДЕСЬ ИСПРАВЛЕНО: modelPath заменен на model
-                                        lm.initializeModel(CactusInitParams(model = localFile.absolutePath, contextSize = 2048))
-                                    } else {
-                                        statusText = "Скачивание модели $modelNameInput..."
-                                        lm.downloadModel(modelNameInput)
-                                        statusText = "Инициализация модели..."
-                                        lm.initializeModel(CactusInitParams(model = modelNameInput, contextSize = 2048))
-                                    }
-                                }
-                                statusText = "Модель готова к работе!"
-                            } catch (e: Exception) {
-                                statusText = "Ошибка: ${e.message}"
+    TextButton(
+        onClick = {
+            showSettingsDialog = false
+            
+            scope.launch {
+                try {
+                    withContext(Dispatchers.IO) {
+                        if (selectedModelUri != null) {
+                            statusText = "Копирование локального файла..."
+                            val localFile = File(context.filesDir, "local_model.gguf")
+                            
+                            // Копируем файл
+                            copyUriToFile(context, selectedModelUri!!, localFile)
+                            
+                            // Проверяем, что файл действительно скопировался и не пустой
+                            if (!localFile.exists() || localFile.length() == 0L) {
+                                throw Exception("Файл не скопировался. Возможно, не хватает памяти на телефоне.")
                             }
+                            
+                            val fileSizeMB = localFile.length() / (1024 * 1024)
+                            statusText = "Файл скопирован ($fileSizeMB МБ). Загрузка в память..."
+                            
+                            // Загружаем модель
+                            lm.initializeModel(CactusInitParams(model = localFile.absolutePath, contextSize = 2048))
+                        } else {
+                            statusText = "Скачивание модели $modelNameInput..."
+                            lm.downloadModel(modelNameInput)
+                            statusText = "Инициализация модели..."
+                            lm.initializeModel(CactusInitParams(model = modelNameInput, contextSize = 2048))
                         }
                     }
-                ) {
-                    Text("Применить")
+                    statusText = "Модель готова к работе!"
+                } catch (e: Exception) {
+                    statusText = "Ошибка: ${e.message}"
                 }
-            },
+            }
+        }
+    ) {
+        Text("Применить")
+    }
+},
             dismissButton = {
                 TextButton(onClick = { showSettingsDialog = false }) {
                     Text("Отмена")
