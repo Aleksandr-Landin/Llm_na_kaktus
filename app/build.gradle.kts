@@ -27,7 +27,7 @@ android {
     kotlinOptions {
         jvmTarget = "17"
     }
-buildFeatures {
+    buildFeatures {
         compose = true
     }
     composeOptions {
@@ -44,4 +44,7 @@ dependencies {
     implementation("androidx.compose.ui:ui-graphics")
     implementation("androidx.compose.material3:material3")
     implementation("androidx.compose.foundation:foundation")
+    
+    // Вот наша библиотека Cactus
+    implementation("com.cactuscompute:cactus:1.4.1-beta")
 }
