@@ -44,9 +44,10 @@ dependencies {
     implementation("androidx.compose.material3:material3")
     implementation("androidx.compose.foundation:foundation")
     
+    // Вот эти две строки нужно добавить:
+    implementation("org.jetbrains.kotlinx:kotlinx-coroutines-android:1.7.3")
+    implementation("androidx.compose.material:material-icons-extended:1.6.0")
+
     // Наш Cactus
-    // Было:
-// implementation("com.cactuscompute:cactus:1.4.1-beta")
-// Стало:
-implementation("com.cactuscompute:cactus:1.0.2-beta")
+    implementation("com.cactuscompute:cactus:1.0.2-beta")
 }
