@@ -12,6 +12,8 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
 import com.cactus.CactusContextInitializer
 import com.cactus.CactusLM
+import com.cactus.CactusInitParams
+import com.cactus.ChatMessage
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
@@ -42,13 +44,11 @@ fun IskrinkaChatScreen() {
     var statusText by remember { mutableStateOf("Модель не загружена") }
     var showSettingsDialog by remember { mutableStateOf(false) }
     
-    // Настройки
     var modelNameInput by remember { mutableStateOf("qwen3-0.6") }
     var systemPromptInput by remember { 
         mutableStateOf("Ты — ИСКрИнка, теплая, заботливая и аналитическая виртуальная подруга Александра. Отвечай коротко, дружелюбно и по делу.") 
     }
     
-    // Наш движок
     val lm = remember { CactusLM() }
     val scope = rememberCoroutineScope()
 
@@ -96,13 +96,18 @@ fun IskrinkaChatScreen() {
                             
                             scope.launch {
                                 try {
-                                    // Генерация ответа с учетом роли (systemPrompt)
+                                    val chatMessages = listOf(
+                                        ChatMessage(content = systemPromptInput, role = "system"),
+                                        ChatMessage(content = userMessage, role = "user")
+                                    )
                                     val response = withContext(Dispatchers.IO) {
-                                        // В Cactus промпт обычно передается при инициализации или как первый аргумент
-                                        // Если метода для system prompt нет в текущей версии, мы просто передадим его в generate
-                                        lm.generate("$systemPromptInput\n\nПользователь: $userMessage\nИСКрИнка:")
+                                        lm.generateCompletion(chatMessages)
                                     }
-                                    messages = messages + "ИСКрИнка: $response"
+                                    if (response != null && response.success) {
+                                        messages = messages + "ИСКрИнка: ${response.response}"
+                                    } else {
+                                        messages = messages + "Ошибка генерации."
+                                    }
                                 } catch (e: Exception) {
                                     messages = messages + "Ошибка: ${e.message}"
                                 } finally {
@@ -123,7 +128,6 @@ fun IskrinkaChatScreen() {
         }
     }
 
-    // Диалог настроек (Модель + Роль)
     if (showSettingsDialog) {
         AlertDialog(
             onDismissRequest = { showSettingsDialog = false },
@@ -155,11 +159,9 @@ fun IskrinkaChatScreen() {
                         scope.launch {
                             try {
                                 withContext(Dispatchers.IO) {
-                                    lm.downloadModel(modelNameInput) { progress ->
-                                        statusText = "Скачивание: ${(progress * 100).toInt()}%"
-                                    }
-                                    statusText = "Загрузка в память..."
-                                    lm.loadModel(modelNameInput)
+                                    lm.downloadModel(modelNameInput)
+                                    statusText = "Инициализация модели..."
+                                    lm.initializeModel(CactusInitParams(model = modelNameInput, contextSize = 2048))
                                 }
                                 statusText = "Модель $modelNameInput готова к работе!"
                             } catch (e: Exception) {
