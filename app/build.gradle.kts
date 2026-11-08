@@ -49,5 +49,5 @@ dependencies {
     implementation("androidx.compose.material:material-icons-extended:1.6.0")
 
     // Наш Cactus
-    implementation("com.cactuscompute:cactus:1.0.2-beta")
+    implementation("com.cactuscompute:cactus:1.4.1-beta")
 }
