@@ -227,7 +227,11 @@ fun IskrinkaChatScreen() {
                             statusText = "Файл скопирован ($fileSizeMB МБ). Загрузка в память..."
                             
                             // Загружаем модель
-                            lm.initializeModel(CactusInitParams(modelPath = localFile.absolutePath, contextSize = 2048))
+                            // Было (не компилируется):
+// lm.initializeModel(CactusInitParams(modelPath = localFile.absolutePath, contextSize = 2048))
+
+// Стало (компилируется):
+                           lm.initializeModel(CactusInitParams(model = localFile.absolutePath, contextSize = 2048))
                         } else {
                             statusText = "Скачивание модели $modelNameInput..."
                             lm.downloadModel(modelNameInput)
