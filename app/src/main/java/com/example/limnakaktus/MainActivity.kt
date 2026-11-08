@@ -10,10 +10,15 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
+import com.cactus.CactusContextInitializer // Добавили импорт Cactus
 
 class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+        
+        // Включаем движок Cactus
+        CactusContextInitializer.initialize(this) 
+        
         setContent {
             MaterialTheme {
                 Surface(
