@@ -205,55 +205,54 @@ fun IskrinkaChatScreen() {
                 }
             },
             confirmButton = {
-    TextButton(
-        onClick = {
-            showSettingsDialog = false
-            
-            scope.launch {
-                try {
-                    withContext(Dispatchers.IO) {
-                        if (selectedModelUri != null) {
-    statusText = "Копирование локального файла..."
-    
-    // Получаем путь (строку) и превращаем его в объект File
-                       val modelsDirPath = CactusModelManager.getModelsDirectory()
-                       val modelsDir = File(modelsDirPath)
-    
-    // Теперь методы .exists() и .mkdirs() будут работать
-                       if (!modelsDir.exists()) {
-                       modelsDir.mkdirs()
-    }
-    
-                       val localFile = File(modelsDir, "local_model.gguf")
-                       copyUriToFile(context, selectedModelUri!!, localFile)
-    
-                       if (!localFile.exists() || localFile.length() == 0L) {
-                       throw Exception("Файл не скопировался. Проверь свободное место.")
-    }
-    
-                        val fileSizeMB = localFile.length() / (1024 * 1024)
-                        statusText = "Файл скопирован ($fileSizeMB МБ). Загрузка..."
-    
-    
-                            lm.initializeModel(CactusInitParams(model = "local_model", contextSize = 2048))
-                        } else {
-                            // Ветка для скачивания по имени (остается без изменений)
-                            statusText = "Скачивание модели $modelNameInput..."
-                            lm.downloadModel(modelNameInput)
-                            statusText = "Инициализация модели..."
-                            lm.initializeModel(CactusInitParams(model = modelNameInput, contextSize = 2048))
+                TextButton(
+                    onClick = {
+                        showSettingsDialog = false
+                        
+                        scope.launch {
+                            try {
+                                withContext(Dispatchers.IO) {
+                                    if (selectedModelUri != null) {
+                                        statusText = "Копирование локального файла..."
+                                        
+                                        // Получаем путь (строку) и превращаем его в объект File
+                                        val modelsDirPath = CactusModelManager.getModelsDirectory()
+                                        val modelsDir = File(modelsDirPath)
+                                        
+                                        // Создаем папку, если её нет
+                                        if (!modelsDir.exists()) {
+                                            modelsDir.mkdirs()
+                                        }
+                                        
+                                        val localFile = File(modelsDir, "local_model.gguf")
+                                        copyUriToFile(context, selectedModelUri!!, localFile)
+                                        
+                                        if (!localFile.exists() || localFile.length() == 0L) {
+                                            throw Exception("Файл не скопировался. Проверь свободное место.")
+                                        }
+                                        
+                                        val fileSizeMB = localFile.length() / (1024 * 1024)
+                                        statusText = "Файл скопирован ($fileSizeMB МБ). Загрузка..."
+                                        
+                                        // ИСПРАВЛЕНО: передаем полный путь к файлу (absolutePath)
+                                        lm.initializeModel(CactusInitParams(model = localFile.absolutePath, contextSize = 2048))
+                                    } else {
+                                        statusText = "Скачивание модели $modelNameInput..."
+                                        lm.downloadModel(modelNameInput)
+                                        statusText = "Инициализация модели..."
+                                        lm.initializeModel(CactusInitParams(model = modelNameInput, contextSize = 2048))
+                                    }
+                                }
+                                statusText = "Модель готова к работе!"
+                            } catch (e: Exception) {
+                                statusText = "Ошибка: ${e.message}"
+                            }
                         }
                     }
-                    statusText = "Модель готова к работе!"
-                } catch (e: Exception) {
-                    statusText = "Ошибка: ${e.message}"
+                ) {
+                    Text("Применить")
                 }
-            }
-        }
-    ) {
-        Text("Применить")
-    }
-},
+            },
             dismissButton = {
                 TextButton(onClick = { showSettingsDialog = false }) {
                     Text("Отмена")
