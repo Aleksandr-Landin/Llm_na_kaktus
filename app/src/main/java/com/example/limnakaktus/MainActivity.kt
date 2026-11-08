@@ -217,7 +217,8 @@ fun IskrinkaChatScreen() {
                                         copyUriToFile(context, selectedModelUri!!, localFile)
                                         
                                         statusText = "Загрузка локальной модели..."
-                                        lm.initializeModel(CactusInitParams(modelPath = localFile.absolutePath, contextSize = 2048))
+                                        // ВОТ ЗДЕСЬ ИСПРАВЛЕНО: modelPath заменен на model
+                                        lm.initializeModel(CactusInitParams(model = localFile.absolutePath, contextSize = 2048))
                                     } else {
                                         statusText = "Скачивание модели $modelNameInput..."
                                         lm.downloadModel(modelNameInput)
