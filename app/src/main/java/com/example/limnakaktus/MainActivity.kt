@@ -215,9 +215,15 @@ fun IskrinkaChatScreen() {
                         if (selectedModelUri != null) {
                             statusText = "Копирование локального файла..."
                             // 1. Получаем папку, которую Cactus использует для моделей
-                            val modelsDir = CactusModelManager.getModelsDirectory()
-                            // 2. Создаем в ней файл с расширением .gguf
-                            val localFile = File(modelsDir, "local_model.gguf")
+                            
+                           val modelsDir = CactusModelManager.getModelsDirectory()
+// Создаем папку models, если её нет
+                           if (!modelsDir.exists()) {
+    modelsDir.mkdirs()
+}
+
+                           val localFile = File(modelsDir, "local_model.gguf")
+copyUriToFile(context, selectedModelUri!!, localFile)
                             
                             // Копируем выбранный файл
                             copyUriToFile(context, selectedModelUri!!, localFile)
