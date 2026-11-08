@@ -27,6 +27,7 @@ android {
     }
     kotlinOptions {
         jvmTarget = "17"
+        freeCompilerArgs = freeCompilerArgs + "-Xskip-metadata-version-check"
     }
     buildFeatures {
         compose = true
