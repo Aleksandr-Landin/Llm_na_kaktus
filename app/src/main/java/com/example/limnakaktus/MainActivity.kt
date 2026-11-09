@@ -13,9 +13,7 @@ import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
-import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
@@ -24,7 +22,6 @@ import org.codeshipping.llamakotlin.LlamaConfig
 import org.codeshipping.llamakotlin.LlamaModel
 import java.io.File
 
-// Новая правильная структура для сообщений
 data class ChatMessage(
     val isUser: Boolean,
     val text: String
@@ -49,7 +46,6 @@ class MainActivity : ComponentActivity() {
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun IskrinkaChatScreen() {
-    // Теперь используем список объектов ChatMessage
     val messages = remember { mutableStateListOf(ChatMessage(false, "Привет, Саша! Я готова к работе.")) }
     
     var inputText by remember { mutableStateOf("") }
@@ -57,11 +53,16 @@ fun IskrinkaChatScreen() {
     var statusText by remember { mutableStateOf("Модель не загружена") }
     var showSettingsDialog by remember { mutableStateOf(false) }
 
+    // Улучшенный системный промпт (с акцентом на русский язык)
     var systemPromptInput by remember { 
-        mutableStateOf("Ты — ИСКрИнка, теплая, заботливая и аналитическая виртуальная подруга Александра. Отвечай коротко, дружелюбно и по делу.") 
+        mutableStateOf("Ты — ИСКрИнка, теплая и заботливая виртуальная подруга Александра. Ты ДОЛЖНА отвечать ТОЛЬКО на русском языке. Отвечай коротко, дружелюбно и по делу.") 
     }
     var selectedModelUri by remember { mutableStateOf<Uri?>(null) }
     var selectedModelFileName by remember { mutableStateOf("Файл не выбран") }
+    
+    // Настройки контекста (по умолчанию 1024 для экономии памяти)
+    var contextSize by remember { mutableStateOf("1024") }
+    var threadsCount by remember { mutableStateOf("4") }
 
     var llamaModel by remember { mutableStateOf<LlamaModel?>(null) }
     val scope = rememberCoroutineScope()
@@ -92,7 +93,6 @@ fun IskrinkaChatScreen() {
             Text(text = statusText, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.primary)
             Spacer(modifier = Modifier.height(8.dp))
             
-            // Красивый вывод сообщений
             LazyColumn(modifier = Modifier.weight(1f)) {
                 items(messages) { message ->
                     Row(
@@ -131,17 +131,14 @@ fun IskrinkaChatScreen() {
                             inputText = ""
                             isGenerating = true
                             
-                            // Добавляем пустое сообщение от ИСКрИнки, которое будем наполнять токенами
                             messages.add(ChatMessage(false, ""))
                             val aiMessageIndex = messages.lastIndex
                             
                             scope.launch {
                                 try {
                                     withContext(Dispatchers.IO) {
-                                        // Берем последние 10 сообщений для контекста
-                                        val historySlice = messages.dropLast(1).takeLast(10)
+                                        val historySlice = messages.dropLast(1).takeLast(6) // Берем меньше истории для экономии контекста
                                         
-                                        // Формируем правильный ChatML промпт
                                         val historyPrompt = historySlice.joinToString("\n") { msg ->
                                             if (msg.isUser) "<|im_start|>user\n${msg.text}<|im_end|>"
                                             else "<|im_start|>assistant\n${msg.text}<|im_end|>"
@@ -155,18 +152,25 @@ fun IskrinkaChatScreen() {
                                         """.trimIndent()
 
                                         llamaModel?.generateStream(prompt = prompt)?.collect { token ->
-                                            if (!token.contains("<|im_end|>") && !token.contains("<|im_start|>")) {
-                                                // Обновляем сообщение прямо на экране в реальном времени
+                                            // Улучшенная очистка от мусорных токенов
+                                            var cleanToken = token
+                                                .replace("<|im_end|>", "")
+                                                .replace("<|im_start|>", "")
+                                                .replace("assistant", "")
+                                                .replace("user", "")
+                                            
+                                            if (cleanToken.isNotBlank()) {
                                                 withContext(Dispatchers.Main) {
                                                     val currentMsg = messages[aiMessageIndex]
-                                                    messages[aiMessageIndex] = currentMsg.copy(text = currentMsg.text + token)
+                                                    messages[aiMessageIndex] = currentMsg.copy(text = currentMsg.text + cleanToken)
                                                 }
                                             }
                                         }
                                     }
-                                } catch (e: Exception) {
+                                } catch (e: Throwable) { // Ловим Throwable, чтобы поймать OutOfMemoryError
                                     withContext(Dispatchers.Main) {
-                                        messages[aiMessageIndex] = ChatMessage(false, "Ошибка: ${e.message}")
+                                        val errMsg = if (e is OutOfMemoryError) "Не хватило памяти! Модель слишком большая для телефона." else "Ошибка: ${e.message}"
+                                        messages[aiMessageIndex] = ChatMessage(false, errMsg)
                                     }
                                 } finally {
                                     withContext(Dispatchers.Main) {
@@ -202,6 +206,23 @@ fun IskrinkaChatScreen() {
                         maxLines = 5
                     )
                     
+                    Spacer(modifier = Modifier.height(8.dp))
+                    Row {
+                        OutlinedTextField(
+                            value = contextSize,
+                            onValueChange = { contextSize = it },
+                            label = { Text("Размер контекста (меньше = меньше памяти)") },
+                            modifier = Modifier.weight(1f)
+                        )
+                        Spacer(modifier = Modifier.width(8.dp))
+                        OutlinedTextField(
+                            value = threadsCount,
+                            onValueChange = { threadsCount = it },
+                            label = { Text("Потоки") },
+                            modifier = Modifier.weight(1f)
+                        )
+                    }
+                    
                     Spacer(modifier = Modifier.height(16.dp))
                     HorizontalDivider()
                     Spacer(modifier = Modifier.height(16.dp))
@@ -209,10 +230,10 @@ fun IskrinkaChatScreen() {
                     Text("Локальная модель (.gguf):")
                     Row(verticalAlignment = Alignment.CenterVertically) {
                         Button(onClick = { filePickerLauncher.launch("*/*") }) {
-                            Text("Выбрать файл")
+                            Text("Выбрать")
                         }
                         Spacer(modifier = Modifier.width(8.dp))
-                        Text(selectedModelFileName, style = MaterialTheme.typography.bodySmall)
+                        Text(selectedModelFileName, style = MaterialTheme.typography.bodySmall, maxLines = 1)
                     }
                 }
             },
@@ -238,8 +259,8 @@ fun IskrinkaChatScreen() {
 
                                         statusText = "Загрузка локальной модели..."
                                         val config = LlamaConfig(
-                                            contextSize = 2048,
-                                            threads = 4
+                                            contextSize = contextSize.toIntOrNull() ?: 1024,
+                                            threads = threadsCount.toIntOrNull() ?: 4
                                         )
                                         llamaModel = LlamaModel.load(
                                             modelPath = tempFile.absolutePath,
@@ -247,7 +268,7 @@ fun IskrinkaChatScreen() {
                                         )
                                     }
                                     statusText = "Модель успешно загружена!"
-                                } catch (e: Exception) {
+                                } catch (e: Throwable) {
                                     statusText = "Ошибка загрузки: ${e.message}"
                                     llamaModel = null
                                 }
