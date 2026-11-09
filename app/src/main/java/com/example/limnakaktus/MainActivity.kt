@@ -19,6 +19,7 @@ import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import org.codeshipping.llamakotlin.LlamaModel
 import java.io.File
+import java.io.File
 
 class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -176,16 +177,35 @@ fun IskrinkaChatScreen() {
                             scope.launch {
                                 try {
                                     withContext(Dispatchers.IO) {
-                                        // Закрываем старую модель, если она была
-                                        llamaModel?.close() 
-                                        
-                                        // Загружаем новую напрямую из URI
-                                        llamaModel = LlamaModel.load(
-                                            path = selectedModelUri.toString(), // Используем URI
-                                            contextSize = 2048,
-                                            threads = 4
-                                        )
-                                    }
+        // Закрываем старую модель, если она была
+                                       llamaModel?.close() 
+
+        // 1. Копируем файл из URI во внутреннюю память
+                                       statusText = "Копирование модели..."
+                                       val inputStream = context.contentResolver.openInputStream(selectedModelUri!!)
+                                       val tempFile = File(context.cacheDir, "local_model.gguf")
+                                       inputStream?.use { input ->
+                                           tempFile.outputStream().use { output ->
+                                               input.copyTo(output)
+            }
+        }
+
+        // 2. Загружаем модель по прямому пути
+                                     statusText = "Загрузка локальной модели..."
+                                     val config = org.codeshipping.llamakotlin.LlamaConfig(
+                                         contextSize = 2048,
+                                         threads = 4
+        )
+                                     llamaModel = LlamaModel.load(
+                                         modelPath = tempFile.absolutePath, // Используем прямой путь!
+                                         config = config
+        )
+    }
+                              statusText = "Модель успешно загружена!"
+}                         catch (e: Exception) {
+                             statusText = "Ошибка загрузки: ${e.message}"
+                             llamaModel = null
+}
                                     statusText = "Модель успешно загружена!"
                                 } catch (e: Exception) {
                                     statusText = "Ошибка загрузки: ${e.message}"
