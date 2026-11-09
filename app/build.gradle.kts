@@ -49,5 +49,14 @@ dependencies {
     implementation("androidx.compose.material:material-icons-extended:1.6.0")
 
     // Наш Cactus
-    implementation("com.cactuscompute:cactus:1.4.1-beta")
+    dependencies {
+    // ... остальные зависимости ...
+
+    // Убираем это:
+    // implementation("com.cactuscompute:cactus:1.4.1-beta")
+    
+    // Добавляем это:
+    implementation("org.codeshipping:llama-kotlin-android:0.1.7")
+
+    // ... остальные зависимости ...
 }
