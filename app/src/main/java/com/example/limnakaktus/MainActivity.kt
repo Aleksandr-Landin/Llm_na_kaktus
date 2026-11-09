@@ -1,6 +1,5 @@
 package com.example.limnakaktus
 
-import android.content.Context
 import android.net.Uri
 import android.os.Bundle
 import androidx.activity.ComponentActivity
@@ -15,21 +14,15 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
-import com.cactus.CactusContextInitializer
-import com.cactus.CactusLM
-import com.cactus.CactusInitParams
-import com.cactus.ChatMessage
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
+import org.codeshipping.llamakotlin.LlamaModel
 import java.io.File
-import java.io.FileOutputStream
-import com.cactus.CactusModelManager
 
 class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
-        CactusContextInitializer.initialize(this)
         setContent {
             MaterialTheme {
                 Surface(
@@ -43,15 +36,6 @@ class MainActivity : ComponentActivity() {
     }
 }
 
-// Функция для копирования выбранного файла во внутреннюю память приложения
-fun copyUriToFile(context: Context, uri: Uri, destinationFile: File) {
-    context.contentResolver.openInputStream(uri)?.use { input ->
-        FileOutputStream(destinationFile).use { output ->
-            input.copyTo(output)
-        }
-    }
-}
-
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun IskrinkaChatScreen() {
@@ -60,28 +44,23 @@ fun IskrinkaChatScreen() {
     var isGenerating by remember { mutableStateOf(false) }
     var statusText by remember { mutableStateOf("Модель не загружена") }
     var showSettingsDialog by remember { mutableStateOf(false) }
-    
-    // Настройки
-    var modelNameInput by remember { mutableStateOf("qwen3-0.6") }
+
     var systemPromptInput by remember { 
         mutableStateOf("Ты — ИСКрИнка, теплая, заботливая и аналитическая виртуальная подруга Александра. Отвечай коротко, дружелюбно и по делу.") 
     }
-    
-    // Для локального файла
     var selectedModelUri by remember { mutableStateOf<Uri?>(null) }
     var selectedModelFileName by remember { mutableStateOf("Файл не выбран") }
-    
-    val lm = remember { CactusLM() }
+
+    var llamaModel by remember { mutableStateOf<LlamaModel?>(null) }
     val scope = rememberCoroutineScope()
     val context = LocalContext.current
 
-    // Лаунчер для выбора файла из памяти телефона
     val filePickerLauncher = rememberLauncherForActivityResult(
         contract = ActivityResultContracts.GetContent()
     ) { uri: Uri? ->
         if (uri != null) {
             selectedModelUri = uri
-            selectedModelFileName = "Выбран локальный файл"
+            selectedModelFileName = uri.lastPathSegment ?: "Выбран файл"
         }
     }
 
@@ -116,31 +95,30 @@ fun IskrinkaChatScreen() {
                     onValueChange = { inputText = it },
                     modifier = Modifier.weight(1f),
                     placeholder = { Text("Напиши сообщение...") },
-                    enabled = !isGenerating && statusText.contains("готова")
+                    enabled = !isGenerating && llamaModel != null
                 )
                 Spacer(modifier = Modifier.width(8.dp))
                 Button(
                     onClick = {
-                        if (inputText.isNotBlank()) {
-                            val userMessage = inputText
+                        val userMessage = inputText
+                        if (userMessage.isNotBlank() && llamaModel != null) {
                             messages = messages + "Вы: $userMessage"
                             inputText = ""
                             isGenerating = true
                             
                             scope.launch {
                                 try {
-                                    val chatMessages = listOf(
-                                        ChatMessage(content = systemPromptInput, role = "system"),
-                                        ChatMessage(content = userMessage, role = "user")
-                                    )
-                                    val response = withContext(Dispatchers.IO) {
-                                        lm.generateCompletion(chatMessages)
+                                    var fullResponse = ""
+                                    // Библиотека поддерживает потоковую генерацию
+                                    withContext(Dispatchers.IO) {
+                                        llamaModel?.generateStream(
+                                            prompt = "$systemPromptInput\n\nПользователь: $userMessage\nИСКрИнка:"
+                                        )?.collect { token ->
+                                            fullResponse += token
+                                            // Для простоты показываем ответ после завершения
+                                        }
                                     }
-                                    if (response != null && response.success) {
-                                        messages = messages + "ИСКрИнка: ${response.response}"
-                                    } else {
-                                        messages = messages + "Ошибка генерации."
-                                    }
+                                    messages = messages + "ИСКрИнка: $fullResponse"
                                 } catch (e: Exception) {
                                     messages = messages + "Ошибка: ${e.message}"
                                 } finally {
@@ -149,7 +127,7 @@ fun IskrinkaChatScreen() {
                             }
                         }
                     },
-                    enabled = !isGenerating && statusText.contains("готова")
+                    enabled = !isGenerating && llamaModel != null
                 ) {
                     if (isGenerating) {
                         CircularProgressIndicator(modifier = Modifier.size(24.dp), color = MaterialTheme.colorScheme.onPrimary)
@@ -179,17 +157,7 @@ fun IskrinkaChatScreen() {
                     Divider()
                     Spacer(modifier = Modifier.height(16.dp))
                     
-                    Text("Вариант 1: Скачать по имени из Cactus:")
-                    OutlinedTextField(
-                        value = modelNameInput,
-                        onValueChange = { modelNameInput = it },
-                        singleLine = true,
-                        enabled = selectedModelUri == null
-                    )
-                    
-                    Spacer(modifier = Modifier.height(16.dp))
-                    
-                    Text("Вариант 2: Загрузить локальный файл (.gguf):")
+                    Text("Локальная модель (.gguf):")
                     Row(verticalAlignment = Alignment.CenterVertically) {
                         Button(onClick = { filePickerLauncher.launch("*/*") }) {
                             Text("Выбрать файл")
@@ -197,55 +165,32 @@ fun IskrinkaChatScreen() {
                         Spacer(modifier = Modifier.width(8.dp))
                         Text(selectedModelFileName, style = MaterialTheme.typography.bodySmall)
                     }
-                    if (selectedModelUri != null) {
-                        TextButton(onClick = { selectedModelUri = null; selectedModelFileName = "Файл не выбран" }) {
-                            Text("Сбросить выбор файла")
-                        }
-                    }
                 }
             },
             confirmButton = {
                 TextButton(
                     onClick = {
                         showSettingsDialog = false
-                        
-                        scope.launch {
-                            try {
-                                withContext(Dispatchers.IO) {
-                                    if (selectedModelUri != null) {
-                                        statusText = "Копирование локального файла..."
+                        if (selectedModelUri != null) {
+                            statusText = "Загрузка локальной модели..."
+                            scope.launch {
+                                try {
+                                    withContext(Dispatchers.IO) {
+                                        // Закрываем старую модель, если она была
+                                        llamaModel?.close() 
                                         
-                                        // Получаем путь (строку) и превращаем его в объект File
-                                        val modelsDirPath = CactusModelManager.getModelsDirectory()
-                                        val modelsDir = File(modelsDirPath)
-                                        
-                                        // Создаем папку, если её нет
-                                        if (!modelsDir.exists()) {
-                                            modelsDir.mkdirs()
-                                        }
-                                        
-                                        val localFile = File(modelsDir, "local_model.gguf")
-                                        copyUriToFile(context, selectedModelUri!!, localFile)
-                                        
-                                        if (!localFile.exists() || localFile.length() == 0L) {
-                                            throw Exception("Файл не скопировался. Проверь свободное место.")
-                                        }
-                                        
-                                        val fileSizeMB = localFile.length() / (1024 * 1024)
-                                        statusText = "Файл скопирован ($fileSizeMB МБ). Загрузка..."
-                                        
-                                        // ИСПРАВЛЕНО: передаем полный путь к файлу (absolutePath)
-                                        lm.initializeModel(CactusInitParams(modelPath = localFile.absolutePath, contextSize = 2048))
-                                    } else {
-                                        statusText = "Скачивание модели $modelNameInput..."
-                                        lm.downloadModel(modelNameInput)
-                                        statusText = "Инициализация модели..."
-                                        lm.initializeModel(CactusInitParams(model = modelNameInput, contextSize = 2048))
+                                        // Загружаем новую напрямую из URI
+                                        llamaModel = LlamaModel.load(
+                                            path = selectedModelUri.toString(), // Используем URI
+                                            contextSize = 2048,
+                                            threads = 4
+                                        )
                                     }
+                                    statusText = "Модель успешно загружена!"
+                                } catch (e: Exception) {
+                                    statusText = "Ошибка загрузки: ${e.message}"
+                                    llamaModel = null
                                 }
-                                statusText = "Модель готова к работе!"
-                            } catch (e: Exception) {
-                                statusText = "Ошибка: ${e.message}"
                             }
                         }
                     }
