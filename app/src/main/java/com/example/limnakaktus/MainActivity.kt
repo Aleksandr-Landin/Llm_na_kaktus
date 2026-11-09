@@ -8,11 +8,14 @@ import androidx.activity.compose.setContent
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.items
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
@@ -20,6 +23,12 @@ import kotlinx.coroutines.withContext
 import org.codeshipping.llamakotlin.LlamaConfig
 import org.codeshipping.llamakotlin.LlamaModel
 import java.io.File
+
+// Новая правильная структура для сообщений
+data class ChatMessage(
+    val isUser: Boolean,
+    val text: String
+)
 
 class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -40,7 +49,9 @@ class MainActivity : ComponentActivity() {
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun IskrinkaChatScreen() {
-    var messages by remember { mutableStateOf(listOf("Привет, Саша! Я готова к работе.")) }
+    // Теперь используем список объектов ChatMessage
+    val messages = remember { mutableStateListOf(ChatMessage(false, "Привет, Саша! Я готова к работе.")) }
+    
     var inputText by remember { mutableStateOf("") }
     var isGenerating by remember { mutableStateOf(false) }
     var statusText by remember { mutableStateOf("Модель не загружена") }
@@ -81,12 +92,25 @@ fun IskrinkaChatScreen() {
             Text(text = statusText, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.primary)
             Spacer(modifier = Modifier.height(8.dp))
             
+            // Красивый вывод сообщений
             LazyColumn(modifier = Modifier.weight(1f)) {
-                items(messages.size) { index ->
-                    Text(
-                        text = messages[index],
-                        modifier = Modifier.padding(vertical = 4.dp)
-                    )
+                items(messages) { message ->
+                    Row(
+                        modifier = Modifier.fillMaxWidth().padding(vertical = 4.dp),
+                        horizontalArrangement = if (message.isUser) Arrangement.End else Arrangement.Start
+                    ) {
+                        Card(
+                            colors = CardDefaults.cardColors(
+                                containerColor = if (message.isUser) MaterialTheme.colorScheme.primaryContainer else MaterialTheme.colorScheme.surfaceVariant
+                            )
+                        ) {
+                            Text(
+                                text = if (message.isUser) message.text else "ИСКрИнка: ${message.text}",
+                                modifier = Modifier.padding(8.dp),
+                                style = MaterialTheme.typography.bodyLarge
+                            )
+                        }
+                    }
                 }
             }
             
@@ -103,25 +127,51 @@ fun IskrinkaChatScreen() {
                     onClick = {
                         val userMessage = inputText
                         if (userMessage.isNotBlank() && llamaModel != null) {
-                            messages = messages + "Вы: $userMessage"
+                            messages.add(ChatMessage(true, userMessage))
                             inputText = ""
                             isGenerating = true
                             
+                            // Добавляем пустое сообщение от ИСКрИнки, которое будем наполнять токенами
+                            messages.add(ChatMessage(false, ""))
+                            val aiMessageIndex = messages.lastIndex
+                            
                             scope.launch {
                                 try {
-                                    var fullResponse = ""
                                     withContext(Dispatchers.IO) {
-                                        llamaModel?.generateStream(
-                                            prompt = "$systemPromptInput\n\nПользователь: $userMessage\nИСКрИнка:"
-                                        )?.collect { token ->
-                                            fullResponse += token
+                                        // Берем последние 10 сообщений для контекста
+                                        val historySlice = messages.dropLast(1).takeLast(10)
+                                        
+                                        // Формируем правильный ChatML промпт
+                                        val historyPrompt = historySlice.joinToString("\n") { msg ->
+                                            if (msg.isUser) "<|im_start|>user\n${msg.text}<|im_end|>"
+                                            else "<|im_start|>assistant\n${msg.text}<|im_end|>"
+                                        }
+
+                                        val prompt = """
+                                            <|im_start|>system
+                                            $systemPromptInput<|im_end|>
+                                            $historyPrompt
+                                            <|im_start|>assistant
+                                        """.trimIndent()
+
+                                        llamaModel?.generateStream(prompt = prompt)?.collect { token ->
+                                            if (!token.contains("<|im_end|>") && !token.contains("<|im_start|>")) {
+                                                // Обновляем сообщение прямо на экране в реальном времени
+                                                withContext(Dispatchers.Main) {
+                                                    val currentMsg = messages[aiMessageIndex]
+                                                    messages[aiMessageIndex] = currentMsg.copy(text = currentMsg.text + token)
+                                                }
+                                            }
                                         }
                                     }
-                                    messages = messages + "ИСКрИнка: $fullResponse"
                                 } catch (e: Exception) {
-                                    messages = messages + "Ошибка: ${e.message}"
+                                    withContext(Dispatchers.Main) {
+                                        messages[aiMessageIndex] = ChatMessage(false, "Ошибка: ${e.message}")
+                                    }
                                 } finally {
-                                    isGenerating = false
+                                    withContext(Dispatchers.Main) {
+                                        isGenerating = false
+                                    }
                                 }
                             }
                         }
