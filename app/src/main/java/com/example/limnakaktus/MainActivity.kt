@@ -1,5 +1,6 @@
 package com.example.limnakaktus
 
+import android.content.Context
 import android.net.Uri
 import android.os.Bundle
 import androidx.activity.ComponentActivity
@@ -53,20 +54,53 @@ fun IskrinkaChatScreen() {
     var statusText by remember { mutableStateOf("Модель не загружена") }
     var showSettingsDialog by remember { mutableStateOf(false) }
 
-    // Улучшенный системный промпт (с акцентом на русский язык)
     var systemPromptInput by remember { 
         mutableStateOf("Ты — ИСКрИнка, теплая и заботливая виртуальная подруга Александра. Ты ДОЛЖНА отвечать ТОЛЬКО на русском языке. Отвечай коротко, дружелюбно и по делу.") 
     }
+    
     var selectedModelUri by remember { mutableStateOf<Uri?>(null) }
     var selectedModelFileName by remember { mutableStateOf("Файл не выбран") }
     
-    // Настройки контекста (по умолчанию 1024 для экономии памяти)
     var contextSize by remember { mutableStateOf("1024") }
     var threadsCount by remember { mutableStateOf("4") }
 
     var llamaModel by remember { mutableStateOf<LlamaModel?>(null) }
     val scope = rememberCoroutineScope()
     val context = LocalContext.current
+    
+    // Постоянный файл для модели
+    val modelFile = remember { File(context.filesDir, "iskrinka_model.gguf") }
+    val sharedPrefs = remember { context.getSharedPreferences("iskrinka_prefs", Context.MODE_PRIVATE) }
+
+    // Функция для автозагрузки, если файл уже существует
+    fun autoLoadModel() {
+        if (modelFile.exists() && llamaModel == null) {
+            statusText = "Автозагрузка модели..."
+            scope.launch {
+                try {
+                    withContext(Dispatchers.IO) {
+                        val config = LlamaConfig(
+                            contextSize = sharedPrefs.getInt("contextSize", 1024),
+                            threads = sharedPrefs.getInt("threads", 4)
+                        )
+                        llamaModel = LlamaModel.load(
+                            modelPath = modelFile.absolutePath,
+                            config = config
+                        )
+                    }
+                    statusText = "Модель успешно загружена!"
+                    selectedModelFileName = modelFile.name
+                } catch (e: Throwable) {
+                    statusText = "Ошибка автозагрузки: ${e.message}"
+                }
+            }
+        }
+    }
+
+    // Вызываем автозагрузку один раз при старте экрана
+    LaunchedEffect(Unit) {
+        autoLoadModel()
+    }
 
     val filePickerLauncher = rememberLauncherForActivityResult(
         contract = ActivityResultContracts.GetContent()
@@ -137,7 +171,7 @@ fun IskrinkaChatScreen() {
                             scope.launch {
                                 try {
                                     withContext(Dispatchers.IO) {
-                                        val historySlice = messages.dropLast(1).takeLast(6) // Берем меньше истории для экономии контекста
+                                        val historySlice = messages.dropLast(1).takeLast(6)
                                         
                                         val historyPrompt = historySlice.joinToString("\n") { msg ->
                                             if (msg.isUser) "<|im_start|>user\n${msg.text}<|im_end|>"
@@ -152,7 +186,6 @@ fun IskrinkaChatScreen() {
                                         """.trimIndent()
 
                                         llamaModel?.generateStream(prompt = prompt)?.collect { token ->
-                                            // Улучшенная очистка от мусорных токенов
                                             var cleanToken = token
                                                 .replace("<|im_end|>", "")
                                                 .replace("<|im_start|>", "")
@@ -167,9 +200,9 @@ fun IskrinkaChatScreen() {
                                             }
                                         }
                                     }
-                                } catch (e: Throwable) { // Ловим Throwable, чтобы поймать OutOfMemoryError
+                                } catch (e: Throwable) {
                                     withContext(Dispatchers.Main) {
-                                        val errMsg = if (e is OutOfMemoryError) "Не хватило памяти! Модель слишком большая для телефона." else "Ошибка: ${e.message}"
+                                        val errMsg = if (e is OutOfMemoryError) "Не хватило памяти! Модель слишком большая." else "Ошибка: ${e.message}"
                                         messages[aiMessageIndex] = ChatMessage(false, errMsg)
                                     }
                                 } finally {
@@ -211,7 +244,7 @@ fun IskrinkaChatScreen() {
                         OutlinedTextField(
                             value = contextSize,
                             onValueChange = { contextSize = it },
-                            label = { Text("Размер контекста (меньше = меньше памяти)") },
+                            label = { Text("Контекст") },
                             modifier = Modifier.weight(1f)
                         )
                         Spacer(modifier = Modifier.width(8.dp))
@@ -248,26 +281,33 @@ fun IskrinkaChatScreen() {
                                     withContext(Dispatchers.IO) {
                                         llamaModel?.close() 
                                         
-                                        statusText = "Копирование модели..."
+                                        statusText = "Копирование модели в память..."
                                         val inputStream = context.contentResolver.openInputStream(uri)
-                                        val tempFile = File(context.cacheDir, "local_model.gguf")
+                                        // Копируем в filesDir (постоянное хранилище приложения)
                                         inputStream?.use { input ->
-                                            tempFile.outputStream().use { output ->
+                                            modelFile.outputStream().use { output ->
                                                 input.copyTo(output)
                                             }
                                         }
 
                                         statusText = "Загрузка локальной модели..."
+                                        val cSize = contextSize.toIntOrNull() ?: 1024
+                                        val tCount = threadsCount.toIntOrNull() ?: 4
+                                        
+                                        // Сохраняем настройки в память телефона
+                                        sharedPrefs.edit().putInt("contextSize", cSize).putInt("threads", tCount).apply()
+
                                         val config = LlamaConfig(
-                                            contextSize = contextSize.toIntOrNull() ?: 1024,
-                                            threads = threadsCount.toIntOrNull() ?: 4
+                                            contextSize = cSize,
+                                            threads = tCount
                                         )
                                         llamaModel = LlamaModel.load(
-                                            modelPath = tempFile.absolutePath,
+                                            modelPath = modelFile.absolutePath,
                                             config = config
                                         )
                                     }
-                                    statusText = "Модель успешно загружена!"
+                                    statusText = "Модель успешно загружена и сохранена!"
+                                    selectedModelFileName = "iskrinka_model.gguf"
                                 } catch (e: Throwable) {
                                     statusText = "Ошибка загрузки: ${e.message}"
                                     llamaModel = null
