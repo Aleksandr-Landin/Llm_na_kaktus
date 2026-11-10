@@ -10,6 +10,7 @@ import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
@@ -63,7 +64,7 @@ fun IskrinkaChatScreen() {
     
     var contextSize by remember { mutableStateOf("1024") }
     var threadsCount by remember { mutableStateOf("4") }
-    var historyLimit by remember { mutableStateOf("6") } // Новая настройка глубины памяти
+    var historyLimit by remember { mutableStateOf("6") }
 
     var llamaModel by remember { mutableStateOf<LlamaModel?>(null) }
     val scope = rememberCoroutineScope()
@@ -72,8 +73,24 @@ fun IskrinkaChatScreen() {
     val modelFile = remember { File(context.filesDir, "iskrinka_model.gguf") }
     val sharedPrefs = remember { context.getSharedPreferences("iskrinka_prefs", Context.MODE_PRIVATE) }
 
+    // 1. Добавляем состояние для списка
+    val listState = rememberLazyListState()
+
+    // 2. Автоматическая прокрутка при добавлении нового сообщения
+    LaunchedEffect(messages.size) {
+        if (messages.isNotEmpty()) {
+            listState.animateScrollToItem(messages.lastIndex)
+        }
+    }
+
+    // 3. Автоматическая прокрутка при печати текста (стриминге)
+    LaunchedEffect(messages.lastOrNull()?.text) {
+        if (messages.isNotEmpty()) {
+            listState.scrollToItem(messages.lastIndex)
+        }
+    }
+
     fun autoLoadModel() {
-        // Подтягиваем сохраненные настройки в интерфейс при старте
         contextSize = sharedPrefs.getInt("contextSize", 1024).toString()
         threadsCount = sharedPrefs.getInt("threads", 4).toString()
         historyLimit = sharedPrefs.getInt("historyLimit", 6).toString()
@@ -119,11 +136,10 @@ fun IskrinkaChatScreen() {
             TopAppBar(
                 title = { Text("Iskrinka") },
                 actions = {
-                    // Кнопка очистки чата
                     IconButton(onClick = {
                         messages.clear()
                         messages.add(ChatMessage(false, "Привет, Саша! Я готова к работе. С чего начнем?"))
-                        isGenerating = false // Прерываем генерацию, если она шла
+                        isGenerating = false
                     }) {
                         Text("🗑️", style = MaterialTheme.typography.titleLarge)
                     }
@@ -139,7 +155,11 @@ fun IskrinkaChatScreen() {
             Text(text = statusText, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.primary)
             Spacer(modifier = Modifier.height(8.dp))
             
-            LazyColumn(modifier = Modifier.weight(1f)) {
+            // 4. Привязываем listState к LazyColumn
+            LazyColumn(
+                state = listState,
+                modifier = Modifier.weight(1f)
+            ) {
                 items(messages) { message ->
                     Row(
                         modifier = Modifier.fillMaxWidth().padding(vertical = 4.dp),
@@ -183,7 +203,6 @@ fun IskrinkaChatScreen() {
                             scope.launch {
                                 try {
                                     withContext(Dispatchers.IO) {
-                                        // Получаем актуальную глубину памяти из настроек
                                         val limit = sharedPrefs.getInt("historyLimit", 6).coerceAtLeast(1)
                                         val historySlice = messages.dropLast(1).takeLast(limit)
                                         
@@ -316,7 +335,6 @@ fun IskrinkaChatScreen() {
                                         val tCount = threadsCount.toIntOrNull() ?: 4
                                         val hLimit = historyLimit.toIntOrNull() ?: 6
                                         
-                                        // Сохраняем все три настройки в память телефона
                                         sharedPrefs.edit()
                                             .putInt("contextSize", cSize)
                                             .putInt("threads", tCount)
