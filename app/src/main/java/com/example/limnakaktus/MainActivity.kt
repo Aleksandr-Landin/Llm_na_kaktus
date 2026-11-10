@@ -55,8 +55,9 @@ fun IskrinkaChatScreen() {
     var statusText by remember { mutableStateOf("Модель не загружена") }
     var showSettingsDialog by remember { mutableStateOf(false) }
 
+    // Имя исправлено здесь
     var systemPromptInput by remember { 
-        mutableStateOf("Ты — ИСКрИнка, теплая и заботливая виртуальная подруга Александра. Ты ДОЛЖНА отвечать ТОЛЬКО на русском языке. Отвечай коротко, дружелюбно и по делу.") 
+        mutableStateOf("Ты — ИСКрИНка, теплая и заботливая виртуальная подруга Александра. Ты ДОЛЖНА отвечать ТОЛЬКО на русском языке. Отвечай коротко, дружелюбно и по делу.") 
     }
     
     var selectedModelUri by remember { mutableStateOf<Uri?>(null) }
@@ -73,17 +74,14 @@ fun IskrinkaChatScreen() {
     val modelFile = remember { File(context.filesDir, "iskrinka_model.gguf") }
     val sharedPrefs = remember { context.getSharedPreferences("iskrinka_prefs", Context.MODE_PRIVATE) }
 
-    // 1. Добавляем состояние для списка
     val listState = rememberLazyListState()
 
-    // 2. Автоматическая прокрутка при добавлении нового сообщения
     LaunchedEffect(messages.size) {
         if (messages.isNotEmpty()) {
             listState.animateScrollToItem(messages.lastIndex)
         }
     }
 
-    // 3. Автоматическая прокрутка при печати текста (стриминге)
     LaunchedEffect(messages.lastOrNull()?.text) {
         if (messages.isNotEmpty()) {
             listState.scrollToItem(messages.lastIndex)
@@ -134,7 +132,7 @@ fun IskrinkaChatScreen() {
     Scaffold(
         topBar = {
             TopAppBar(
-                title = { Text("Iskrinka") },
+                title = { Text("ИСКрИНка") }, // Изменено в заголовке
                 actions = {
                     IconButton(onClick = {
                         messages.clear()
@@ -155,7 +153,6 @@ fun IskrinkaChatScreen() {
             Text(text = statusText, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.primary)
             Spacer(modifier = Modifier.height(8.dp))
             
-            // 4. Привязываем listState к LazyColumn
             LazyColumn(
                 state = listState,
                 modifier = Modifier.weight(1f)
@@ -171,7 +168,8 @@ fun IskrinkaChatScreen() {
                             )
                         ) {
                             Text(
-                                text = if (message.isUser) message.text else "ИСКрИнка: ${message.text}",
+                                // Имя исправлено здесь
+                                text = if (message.isUser) message.text else "ИСКрИНка: ${message.text}",
                                 modifier = Modifier.padding(8.dp),
                                 style = MaterialTheme.typography.bodyLarge
                             )
@@ -261,7 +259,7 @@ fun IskrinkaChatScreen() {
     if (showSettingsDialog) {
         AlertDialog(
             onDismissRequest = { showSettingsDialog = false },
-            title = { Text("Настройки ИСКрИнки") },
+            title = { Text("Настройки ИСКрИНки") }, // Изменено в диалоге
             text = {
                 Column {
                     Text("Системный промпт (Роль):")
