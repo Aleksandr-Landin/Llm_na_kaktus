@@ -47,7 +47,7 @@ class MainActivity : ComponentActivity() {
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun IskrinkaChatScreen() {
-    val messages = remember { mutableStateListOf(ChatMessage(false, "Привет, Саша! Я готова к работе.")) }
+    val messages = remember { mutableStateListOf(ChatMessage(false, "Привет, Саша! Я готова к работе. С чего начнем?")) }
     
     var inputText by remember { mutableStateOf("") }
     var isGenerating by remember { mutableStateOf(false) }
@@ -63,17 +63,21 @@ fun IskrinkaChatScreen() {
     
     var contextSize by remember { mutableStateOf("1024") }
     var threadsCount by remember { mutableStateOf("4") }
+    var historyLimit by remember { mutableStateOf("6") } // Новая настройка глубины памяти
 
     var llamaModel by remember { mutableStateOf<LlamaModel?>(null) }
     val scope = rememberCoroutineScope()
     val context = LocalContext.current
     
-    // Постоянный файл для модели
     val modelFile = remember { File(context.filesDir, "iskrinka_model.gguf") }
     val sharedPrefs = remember { context.getSharedPreferences("iskrinka_prefs", Context.MODE_PRIVATE) }
 
-    // Функция для автозагрузки, если файл уже существует
     fun autoLoadModel() {
+        // Подтягиваем сохраненные настройки в интерфейс при старте
+        contextSize = sharedPrefs.getInt("contextSize", 1024).toString()
+        threadsCount = sharedPrefs.getInt("threads", 4).toString()
+        historyLimit = sharedPrefs.getInt("historyLimit", 6).toString()
+
         if (modelFile.exists() && llamaModel == null) {
             statusText = "Автозагрузка модели..."
             scope.launch {
@@ -97,7 +101,6 @@ fun IskrinkaChatScreen() {
         }
     }
 
-    // Вызываем автозагрузку один раз при старте экрана
     LaunchedEffect(Unit) {
         autoLoadModel()
     }
@@ -116,7 +119,16 @@ fun IskrinkaChatScreen() {
             TopAppBar(
                 title = { Text("Iskrinka") },
                 actions = {
-                    Button(onClick = { showSettingsDialog = true }) {
+                    // Кнопка очистки чата
+                    IconButton(onClick = {
+                        messages.clear()
+                        messages.add(ChatMessage(false, "Привет, Саша! Я готова к работе. С чего начнем?"))
+                        isGenerating = false // Прерываем генерацию, если она шла
+                    }) {
+                        Text("🗑️", style = MaterialTheme.typography.titleLarge)
+                    }
+                    
+                    Button(onClick = { showSettingsDialog = true }, modifier = Modifier.padding(end = 8.dp)) {
                         Text("Настройки")
                     }
                 }
@@ -171,7 +183,9 @@ fun IskrinkaChatScreen() {
                             scope.launch {
                                 try {
                                     withContext(Dispatchers.IO) {
-                                        val historySlice = messages.dropLast(1).takeLast(6)
+                                        // Получаем актуальную глубину памяти из настроек
+                                        val limit = sharedPrefs.getInt("historyLimit", 6).coerceAtLeast(1)
+                                        val historySlice = messages.dropLast(1).takeLast(limit)
                                         
                                         val historyPrompt = historySlice.joinToString("\n") { msg ->
                                             if (msg.isUser) "<|im_start|>user\n${msg.text}<|im_end|>"
@@ -256,6 +270,14 @@ fun IskrinkaChatScreen() {
                         )
                     }
                     
+                    Spacer(modifier = Modifier.height(8.dp))
+                    OutlinedTextField(
+                        value = historyLimit,
+                        onValueChange = { historyLimit = it },
+                        label = { Text("Глубина памяти (сообщений)") },
+                        modifier = Modifier.fillMaxWidth()
+                    )
+                    
                     Spacer(modifier = Modifier.height(16.dp))
                     HorizontalDivider()
                     Spacer(modifier = Modifier.height(16.dp))
@@ -283,7 +305,6 @@ fun IskrinkaChatScreen() {
                                         
                                         statusText = "Копирование модели в память..."
                                         val inputStream = context.contentResolver.openInputStream(uri)
-                                        // Копируем в filesDir (постоянное хранилище приложения)
                                         inputStream?.use { input ->
                                             modelFile.outputStream().use { output ->
                                                 input.copyTo(output)
@@ -293,9 +314,14 @@ fun IskrinkaChatScreen() {
                                         statusText = "Загрузка локальной модели..."
                                         val cSize = contextSize.toIntOrNull() ?: 1024
                                         val tCount = threadsCount.toIntOrNull() ?: 4
+                                        val hLimit = historyLimit.toIntOrNull() ?: 6
                                         
-                                        // Сохраняем настройки в память телефона
-                                        sharedPrefs.edit().putInt("contextSize", cSize).putInt("threads", tCount).apply()
+                                        // Сохраняем все три настройки в память телефона
+                                        sharedPrefs.edit()
+                                            .putInt("contextSize", cSize)
+                                            .putInt("threads", tCount)
+                                            .putInt("historyLimit", hLimit)
+                                            .apply()
 
                                         val config = LlamaConfig(
                                             contextSize = cSize,
